@@ -1,7 +1,8 @@
 {
-  "name": "abc-analysis",
+  "name": "abc-fetch",
   "version": "1.0.0",
-  "description": "",
+  "description": "Download news articles from the Australian Broadcasting Corporation's API",
+  "repository": {"url": "https://github.com/callumskeet/abc-fetch"},
   "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,7 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "node-fetch": "^2.6.1",
-    "progress": "^2.0.3"
+    "progress": "^2.0.3",
+    "yargs": "^16.2.0"
   },
   "devDependencies": {
     "prettier": "2.2.1"
