@@ -10,19 +10,22 @@ $ npm install
 ## Run
 
 ```shell
-$ node main.js search \    # fetches all article ids from the api
-    --n_pages \          # number of pages to go through (default all)
+$ node main.js search \  # fetches article ids from the api
+    --n_pages \          # number of pages to retrieve (default 1)
     --page_size          # results per page (max 2000)
 ```
 
-The search function will output all ids to a file under `data` named `search-results.txt`. 
+The search function will output all ids to a file named `search-results.txt` by default.
 
 ```shell
-$ node main.js process \    # processes fetched ids
-    --file                # file containing article ids
+$ node main.js fetch \    # fetches articles from id file
+    --file \              # file containing article ids
+    --dir                 # folder to save the articles to       
 ```
 
-Articles will be saved under `data/articles` as JSON files named using their article id.
+Articles will be saved under `data/articles` as JSON files named using their article id. Articles that couldn't be retrived will have their ID saved to a file under `log` called `missing-articles.txt`.
+
+The directory passed to `--dir` will be created if it doesn't exist.
 
 ## Schema
 
