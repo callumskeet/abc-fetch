@@ -205,10 +205,6 @@ const argv = yargs
     .alias("help", "h").argv;
 
 const main = async () => {
-    fs.mkdir("articles", { recursive: true }, (err) => {
-        if (err) console.error(err);
-    });
-
     fs.mkdir("log", { recursive: true }, (err) => {
         if (err) console.error(err);
     });
@@ -241,6 +237,11 @@ const main = async () => {
             file: argv.file || "search-results.txt",
             dir: argv.dir || "articles",
         };
+
+        fs.mkdir(options.dir, { recursive: true }, (err) => {
+            if (err) console.error(err);
+        });
+
         await fetchArticlesFromIds(options);
     }
 };
