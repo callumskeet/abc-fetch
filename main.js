@@ -1,11 +1,13 @@
 const fs = require("fs");
 const fetch = require("node-fetch");
 const ProgressBar = require("progress");
+const { options } = require("yargs");
+const yargs = require("yargs");
 
-const API_KEY = "54564fe299e84f46a57057266fcf233b";
+const API_KEY = "54564fe299e84f46a57057266fcf233b"; // https://github.com/abcnews/terminus-fetch/blob/master/src/index.ts
 
 const DEFAULT_OPTIONS = {
-    size: 2000,
+    limit: 2000,
     doctype: "article",
     offset: 0,
 };
@@ -33,7 +35,7 @@ const search = (options) => {
     var url =
         "https://api.abc.net.au" +
         "/terminus/api/v1/search/coremedia?" +
-        `limit=${options.size}&` +
+        `limit=${options.limit}&` +
         `doctype=${options.doctype}&` +
         `offset=${options.offset}&` +
         `apikey=${API_KEY}`;
@@ -45,17 +47,13 @@ const search = (options) => {
             data._embedded.content.forEach((result) => {
                 ids.push(result.id);
             });
-            fs.appendFile(
-                "data/search-results.txt",
-                "\n" + ids.join("\n"),
-                logErr
-            );
+            fs.appendFile(options.file, "\n" + ids.join("\n"), logErr);
             return data.pagination;
         })
         .catch(console.error);
 };
 
-const fetchArticle = async (id) => {
+const fetchArticle = async (id, outdir) => {
     var url =
         "https://api.abc.net.au" +
         "/terminus/api/v1/content/coremedia/article/" +
@@ -67,13 +65,13 @@ const fetchArticle = async (id) => {
         .then(processArticle)
         .then((article) => {
             fs.writeFile(
-                `data/articles/${article.id}.json`,
+                `${outdir}/${article.id}.json`,
                 JSON.stringify(article),
                 logErr
             );
         })
         .catch((reason) => {
-            fs.appendFile("data/missing-articles.txt", `${id}\n`, logErr);
+            fs.appendFile("log/missing-articles.txt", `${id}\n`, logErr);
         });
 };
 
@@ -144,26 +142,12 @@ const retryFetch = (url, delay, retries) =>
             });
     });
 
-const fetchAllIds = async () => {
-    var opts = await search();
-    var bar = new ProgressBar("[:bar] :rate/bps :percent :etas", {
-        total: opts.total - DEFAULT_OPTIONS.offset,
-        complete: "=",
-        incomplete: " ",
-        width: 30,
-    });
-    while (opts.offset < opts.total) {
-        opts.offset += opts.size;
-        opts = await search(opts);
-        bar.tick(opts.size);
-    }
-};
-
-(async () => {
+const fetchArticlesFromIds = async (options) => {
     var articleIds = fs
-        .readFileSync("data/search-results.txt", "utf8")
-        .split("\r\n")
+        .readFileSync(options.file, "utf8")
+        .split(/\r?\n/)
         .slice(1);
+    
     var bar = new ProgressBar("[:bar] :rate/bps :percent :etas", {
         total: articleIds.length,
         complete: "=",
@@ -171,7 +155,7 @@ const fetchAllIds = async () => {
         width: 30,
     });
 
-    var savedArticles = fs.readdirSync("data/articles");
+    var savedArticles = fs.readdirSync(options.dir);
     for (let i = 0; i < savedArticles.length; i++) {
         savedArticles[i] = savedArticles[i].split(".")[0];
     }
@@ -181,8 +165,84 @@ const fetchAllIds = async () => {
         if (savedArticles.includes(id)) {
             bar.tick(1);
         } else {
-            await fetchArticle(parseInt(id))
+            await fetchArticle(parseInt(id), options.dir);
             bar.tick(1);
         }
     }
-})();
+};
+
+const argv = yargs
+    .command("search", "fetches article ids", {
+        n_pages: {
+            description: "number of pages to fetch",
+            alias: "n",
+            type: "number",
+        },
+        limit: {
+            description: "max results per page",
+            alias: "l",
+            type: "number",
+        },
+        file: {
+            description: "file to save ids to",
+            alias: "f",
+            type: "string",
+        },
+    })
+    .command("fetch", "downloads articles from ids", {
+        file: {
+            description: "file containing article ids",
+            alias: "f",
+            type: "string",
+        },
+        dir: {
+            description: "output dir to save articles to",
+            alias: "d",
+            type: "string",
+        },
+    })
+    .help()
+    .alias("help", "h").argv;
+
+const main = async () => {
+    fs.mkdir("articles", { recursive: true }, (err) => {
+        if (err) console.error(err);
+    });
+
+    fs.mkdir("log", { recursive: true }, (err) => {
+        if (err) console.error(err);
+    });
+
+    if (argv._.includes("search")) {
+        var nPages = argv.n_pages || 1;
+        var options = {
+            limit: argv.limit || 5,
+            file: argv.file || "search-results.txt",
+            doctype: "article",
+            offset: 0,
+        };
+
+        var bar = new ProgressBar("[:bar] :rate/bps :percent :etas", {
+            total: nPages,
+            complete: "=",
+            incomplete: " ",
+            width: 30,
+        });
+
+        var pagination = await search(options);
+        bar.tick(1);
+        for (let i = 1; i < nPages; i++) {
+            options.offset = pagination.offset;
+            pagination = await search(options);
+            bar.tick(1);
+        }
+    } else if (argv._.includes("fetch")) {
+        var options = {
+            file: argv.file || "search-results.txt",
+            dir: argv.dir || "articles",
+        };
+        await fetchArticlesFromIds(options);
+    }
+};
+
+main();
