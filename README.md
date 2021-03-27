@@ -1,5 +1,5 @@
 # abc-fetch
-ABC News has a publicly accessible API which can be accessed through this node.js script. Note that datasets created from these articles cannot be uploaded without the permission of the ABC (see the policy [here](https://help.abc.net.au/hc/en-us/articles/360001548096)). You're free to use the data for personal, non-commercial purposes.
+ABC News has a public API which can be accessed through this node.js script. Note that datasets created from these articles cannot be uploaded without the permission of the ABC (see the policy [here](https://help.abc.net.au/hc/en-us/articles/360001548096)). You're free to use the data for personal, non-commercial purposes.
 
 ## Install
 
@@ -27,7 +27,7 @@ Articles will be saved under `data/articles` as JSON files named using their art
 
 The directory passed to `--dir` will be created if it doesn't exist.
 
-## Schema
+## Article schema
 
 ```js
 {
