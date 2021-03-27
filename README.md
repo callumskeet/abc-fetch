@@ -12,7 +12,8 @@ $ npm install
 ```shell
 $ node main.js search \  # fetches article ids from the api
     --n_pages \          # number of pages to retrieve (default 1)
-    --page_size          # results per page (max 2000)
+    --limit \            # results per page (max 2000)
+    --file               # file to save ids to
 ```
 
 The search function will output all ids to a file named `search-results.txt` by default.
