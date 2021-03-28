@@ -1,7 +1,6 @@
 const fs = require("fs");
 const fetch = require("node-fetch");
 const ProgressBar = require("progress");
-const { options } = require("yargs");
 const yargs = require("yargs");
 
 const API_KEY = "54564fe299e84f46a57057266fcf233b"; // https://github.com/abcnews/terminus-fetch/blob/master/src/index.ts
