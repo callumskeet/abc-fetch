@@ -22,12 +22,12 @@ The search function will output all ids to a file named `search-results.txt` by 
 
 ```shell
 $ node main.js fetch \    # fetches articles from id file
-    --id \                # an article id (last part of abc.net.au article url)
-    --file \              # file containing article ids (either id or file should be passed)
+     --id \               # an article id (last part of abc.net.au article url)
+     --file \             # file containing article ids (either id or file should be passed)
     [--dir]               # folder to save the articles to       
 ```
 
-Articles will be saved under `data/articles` as JSON files named using their article id. Articles that couldn't be retrived will have their ID saved to a file under `log` called `missing-articles.txt`.
+Articles will be saved under `./articles` as JSON files named using their article id. Articles that couldn't be retrived will have their ID saved to a file under `./log` called `missing-articles.txt`.
 
 The directory passed to `--dir` will be created if it doesn't exist.
 
