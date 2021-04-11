@@ -250,7 +250,7 @@ const main = async () => {
             var id = argv.id;
             var outdir = argv.dir || "articles";
 
-            fs.mkdir(options.dir, { recursive: true }, (err) => {
+            fs.mkdir(outdir, { recursive: true }, (err) => {
                 if (err) console.error(err);
             });
 
