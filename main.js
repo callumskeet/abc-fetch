@@ -1,9 +1,10 @@
 const fs = require("fs");
 const fetch = require("node-fetch");
 const ProgressBar = require("progress");
+const { option } = require("yargs");
 const yargs = require("yargs");
 
-const API_KEY = "54564fe299e84f46a57057266fcf233b"; // https://github.com/abcnews/terminus-fetch/blob/master/src/index.ts
+const API_KEY = "54564fe299e84f46a57057266fcf233b"; // https://github.com/abcnews/terminus-fetch#default-options
 
 const DEFAULT_OPTIONS = {
     limit: 2000,
@@ -52,7 +53,24 @@ const search = (options) => {
         .catch(console.error);
 };
 
-const fetchArticle = async (id, outdir) => {
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const retryFetch = (url, delay, retries) =>
+    new Promise((resolve, reject) => {
+        return fetch(url)
+            .then(resolve)
+            .catch((reason) => {
+                if (retries > 0) {
+                    return wait(delay)
+                        .then(retryFetch.bind(url, delay, retries - 1))
+                        .then(resolve)
+                        .catch(reject);
+                }
+                return reject(reason);
+            });
+    });
+
+const fetchArticle = async (id) => {
     var url =
         "https://api.abc.net.au" +
         "/terminus/api/v1/content/coremedia/article/" +
@@ -61,17 +79,31 @@ const fetchArticle = async (id, outdir) => {
 
     return fetch(url)
         .then((res) => res.json())
-        .then(processArticle)
-        .then((article) => {
-            fs.writeFile(
-                `${outdir}/${article.id}.json`,
-                JSON.stringify(article),
-                logErr
-            );
-        })
         .catch((reason) => {
             fs.appendFile("log/missing-articles.txt", `${id}\n`, logErr);
         });
+};
+
+const parseDOM = (node, body) => {
+    if (node.type === "text") {
+        body.push(node.content);
+        return;
+    }
+
+    for (child of node.children) {
+        if (child.type === "element" && child.tagname === "p") {
+            body.push("\n");
+        }
+        if (
+            node.type === "element" &&
+            node.tagname === "a" &&
+            child.type === "text" &&
+            child.content.startsWith("[")
+        ) {
+            continue;
+        }
+        parseDOM(child, body);
+    }
 };
 
 const processArticle = async (data) => {
@@ -92,31 +124,10 @@ const processArticle = async (data) => {
             importance: data.importance,
             version: data.version,
         };
-        for (let i = 0; i < data.text.children.length; i++) {
-            const x = data.text.children[i];
-            if (typeof x.children === "undefined") {
-                continue;
-            }
-            let paragraph = "";
-            for (let j = 0; j < x.children.length; j++) {
-                const y = x.children[j];
-                let content = y.content;
-                if (y.tagname === "br") {
-                    content = "\n";
-                } else if (typeof content === "undefined") {
-                    content = "";
-                    if (typeof y.children === "undefined") {
-                        continue;
-                    }
-                    for (let k = 0; k < y.children.length; k++) {
-                        const z = y.children[k];
-                        content += z.content;
-                    }
-                }
-                paragraph += content;
-            }
-            article.body.push(paragraph);
-        }
+
+        var body = [];
+        parseDOM(data.text, body);
+        article.body = body.join("").slice(1);
         return article;
     } catch (error) {
         console.error(error);
@@ -124,29 +135,18 @@ const processArticle = async (data) => {
     }
 };
 
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const saveArticle = (article, dir) => {
+    const path = `${dir}/${article.id}.json`;
+    const data = JSON.stringify(article);
+    fs.writeFile(path, data, logErr);
+};
 
-const retryFetch = (url, delay, retries) =>
-    new Promise((resolve, reject) => {
-        return fetch(url)
-            .then(resolve)
-            .catch((reason) => {
-                if (retries > 0) {
-                    return wait(delay)
-                        .then(retryFetch.bind(url, delay, retries - 1))
-                        .then(resolve)
-                        .catch(reject);
-                }
-                return reject(reason);
-            });
-    });
-
-const fetchArticlesFromIds = async (options) => {
+const fetchAndParseArticlesFromIdFile = async (options) => {
     var articleIds = fs
         .readFileSync(options.file, "utf8")
         .split(/\r?\n/)
         .slice(1);
-    
+
     var bar = new ProgressBar("[:bar] :rate/bps :percent :etas", {
         total: articleIds.length,
         complete: "=",
@@ -159,14 +159,16 @@ const fetchArticlesFromIds = async (options) => {
         savedArticles[i] = savedArticles[i].split(".")[0];
     }
 
-    for (let i = 0; i < articleIds.length; i++) {
-        const id = articleIds[i];
+    for (id of articleIds) {
         if (savedArticles.includes(id)) {
             bar.tick(1);
-        } else {
-            await fetchArticle(parseInt(id), options.dir);
-            bar.tick(1);
+            continue;
         }
+
+        await fetchArticle(parseInt(id))
+            .then(processArticle)
+            .then((article) => saveArticle(article, options.dir));
+        bar.tick(1);
     }
 };
 
@@ -188,7 +190,12 @@ const argv = yargs
             type: "string",
         },
     })
-    .command("fetch", "downloads articles from ids", {
+    .command("fetch", "downloads articles from id", {
+        id: {
+            description: "an article id",
+            alias: "i",
+            type: "number",
+        },
         file: {
             description: "file containing article ids",
             alias: "f",
@@ -197,6 +204,13 @@ const argv = yargs
         dir: {
             description: "output dir to save articles to",
             alias: "d",
+            type: "string",
+        },
+    })
+    .command("parse", "parses an article", {
+        file: {
+            description: "unprocessed article downloaded from the api",
+            alias: "f",
             type: "string",
         },
     })
@@ -232,16 +246,53 @@ const main = async () => {
             bar.tick(1);
         }
     } else if (argv._.includes("fetch")) {
-        var options = {
-            file: argv.file || "search-results.txt",
-            dir: argv.dir || "articles",
-        };
+        if (argv.id) {
+            var id = argv.id;
+            var outdir = argv.dir || "articles";
 
-        fs.mkdir(options.dir, { recursive: true }, (err) => {
-            if (err) console.error(err);
+            fs.mkdir(options.dir, { recursive: true }, (err) => {
+                if (err) console.error(err);
+            });
+
+            await fetchArticle(id)
+                .then(processArticle)
+                .then((article) => saveArticle(article, outdir));
+        } else if (argv.file) {
+            var options = {
+                id: argv.file || undefined,
+                file: argv.file || undefined,
+                dir: argv.dir || "articles",
+            };
+
+            fs.mkdir(options.dir, { recursive: true }, (err) => {
+                if (err) console.error(err);
+            });
+
+            await fetchAndParseArticlesFromIdFile(options);
+        } else {
+            console.error("No article id or id file passed. Exiting...");
+            return;
+        }
+    } else if (argv._.includes("parse")) {
+        if (!argv.file) {
+            console.error("No article file to parse. Exiting...");
+            return;
+        }
+
+        fs.readFile(argv.file, async (err, data) => {
+            logErr(err);
+            data = JSON.parse(data);
+            const article = await processArticle(data);
+
+            fs.writeFile(
+                `articles/${argv.id}.json`,
+                JSON.stringify(article),
+                (err) => {
+                    logErr(err);
+                    console.log("The file has been saved.");
+                }
+            );
         });
-
-        await fetchArticlesFromIds(options);
     }
 };
 
