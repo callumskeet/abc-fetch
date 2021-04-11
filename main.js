@@ -7,7 +7,7 @@ const yargs = require("yargs");
 const API_KEY = "54564fe299e84f46a57057266fcf233b"; // https://github.com/abcnews/terminus-fetch#default-options
 
 const DEFAULT_OPTIONS = {
-    limit: 2000,
+    limit: 5,
     doctype: "article",
     offset: 0,
 };
